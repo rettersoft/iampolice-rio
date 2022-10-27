@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": ["accessKeyId", "accessKeySecret"],
+  "properties": {
+    "accountCount": {
+      "type": "number",
+      "description": "Number of AWS accounts to process"
+    },
+    "accessKeyId": {
+      "type": "string"
+    },
+    "accessKeySecret": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": ["accountId", "status"],
+  "properties": {
+    "accountId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["not_started", "running", "finished"]
+    },
+    "data": {
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+init: 
+  handler: index.init
+  inputModel: InitBody
+getState: index.getState
+getInstanceId: index.getInstanceId
+methods:
+
+  - method: sendOtp
+    type: WRITE
+    handler: index.sendOtp
+
+  - method: verifyOtp
+    type: WRITE
+    inputModel: VerifyOtpInput
+    handler: index.verifyOtp
+
+  - method: changeAccountTier
+    type: WRITE
+    inputModel: ChangeAccountTier
+    handler: index.changeAccountTier
+
+  - method: reset
+    type: WRITE
+    handler: index.reset
+
+  - method: handleEvents
+    type: QUEUED_WRITE
+    handler: index.handleEvents
+
+  # - method: fetchUsers
+  #   type: WRITE
+  #   handler: index.fetchUsers
+
+  # - method: cancelFetchUsers
+  #   type: WRITE
+  #   handler: index.cancelFetchUsers

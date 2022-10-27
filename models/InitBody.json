@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "required": ["email"],
+  "properties": {
+    "email": {
+      "type": "string",
+      "description": "Your email",
+      "format": "email"
+    }
+  }
+}

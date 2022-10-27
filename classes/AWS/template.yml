@@ -1,0 +1,35 @@
+init: 
+  handler: index.init
+getState: index.getState
+getInstanceId: index.getInstanceId
+destinations:
+  - id: firestore_dest
+methods:
+
+  - method: start
+    type: QUEUED_WRITE
+    handler: index.start
+
+  - method: startNextAccount
+    type: QUEUED_WRITE
+    handler: index.startNextAccount
+
+  - method: clear
+    type: WRITE
+    handler: index.clear
+
+  - method: getData
+    type: WRITE
+    handler: index.getData
+
+  - method: setCredentials
+    type: WRITE
+    inputModel: AWSSecretsInput
+    handler: index.setCredentials
+
+
+  - method: receiveWorkerEvents
+    type: QUEUED_WRITE
+    handler: index.receiveWorkerEvents
+
+

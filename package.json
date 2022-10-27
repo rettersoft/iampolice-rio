@@ -1,0 +1,16 @@
+{
+  "name": "retter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc -b .",
+    "deploy": "rio deploy --ignore-approval --profile riodev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "14.17.2"
+  }
+}

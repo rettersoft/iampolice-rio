@@ -1,0 +1,12 @@
+init: 
+  handler: index.init
+getState: index.getState
+getInstanceId: index.getInstanceId
+methods:
+
+  - method: start
+    type: QUEUED_WRITE
+    inputModel: AWSIAMWorkerStartInput
+    handler: index.start
+
+
