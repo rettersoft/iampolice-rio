@@ -178,7 +178,7 @@ export async function receiveWorkerEvents(data: AWSData<AWSWorkerEventBody>): Pr
 
     // If this worker has finished add its data to awsResources in private state
     if (data.request.body.status === "finished") {
-        const resources:AWSResource[] = data.request.body.data as AWSResource[]
+        const resources: AWSResource[] = data.request.body.data as AWSResource[]
         data.state.private.awsResources = data.state.private.awsResources.concat(resources)
     }
 
@@ -271,17 +271,31 @@ export async function startNextAccount(data: AWSData): Promise<Data> {
     return data
 }
 
-export async function getData(data: AWSData): Promise<Data> {
+
+
+export async function getSettings(data: AWSData): Promise<Data> {
+
+    // Create masked strings of credentials in private state
+    const credentials = data.state.private.credentials
+    if (credentials) {
+        data.response = {
+            statusCode: 200,
+            body: {
+                credentials: {
+                    accessKeyId: credentials.accessKeyId.substring(0, 4) + "****" + credentials.accessKeyId.substring(credentials.accessKeyId.length - 4),
+                    secretAccessKey: credentials.secretAccessKey.substring(0, 4) + "****" + credentials.secretAccessKey.substring(credentials.secretAccessKey.length - 4)
+                }
+            }
+        }
+    }
+    
+    return data
+}
+
+export async function getResources(data: AWSData): Promise<Data> {
     data.response = {
         statusCode: 200,
-        body: {
-            iamUsers: data.state.private.iamUsers,
-            awsAccounts: data.state.private.awsAccounts,
-            errors: data.state.private.errors,
-            groups: data.state.private.groups,
-            roles: data.state.private.roles,
-            policies: data.state.private.policies
-        }
+        body: data.state.private.awsResources
     }
     return data
 }

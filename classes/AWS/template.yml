@@ -18,9 +18,13 @@ methods:
     type: WRITE
     handler: index.clear
 
-  - method: getData
-    type: WRITE
-    handler: index.getData
+  - method: getSettings
+    type: READ
+    handler: index.getSettings
+
+  - method: getResources
+    type: READ
+    handler: index.getResources
 
   - method: setCredentials
     type: WRITE
