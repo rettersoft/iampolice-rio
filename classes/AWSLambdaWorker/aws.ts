@@ -46,7 +46,7 @@ export default class AWSHandler {
         while (marker !== undefined) {
 
             let authDetails = await iam.getAccountAuthorizationDetails({
-                Filter: ["User", "Group", "Role"],
+                Filter: ["User", "Group"],
                 Marker: marker
             }).promise()
 

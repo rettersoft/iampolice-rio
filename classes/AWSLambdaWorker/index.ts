@@ -1,9 +1,8 @@
 import RDK, { Data, InitResponse, Response, StepResponse } from "@retter/rdk";
 import AWS from "aws-sdk";
-import { InitBody, AWSSecretsInput, AWSWorkerStartInput } from './rio'
+import { InitBody, StartIAMFetchInput, AWSSecretsInput, AWSWorkerStartInput } from './rio'
 import AWSHandler from './aws'
 const rdk = new RDK();
-import _ from 'lodash'
 
 interface AttachedManagedPolicy {
     PolicyName: string;
@@ -59,9 +58,8 @@ export async function getState(data: Data): Promise<Response> {
 
 interface AWSResource {
     arn: string
-    label: string
     accountId: string
-    config: any
+    data: any
     resourceType: string
 }
 
@@ -93,29 +91,25 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
         resources.push({
             arn: user.Arn,
             accountId: user.Arn.split(":")[4],
-            label: user.UserName,
-            config: user,
-            resourceType: "AWS::IAM::User"
+            data: user,
+            resourceType: "aws:iam:user"
         })
     })
     authDetails.groups.forEach((group: any) => {
         resources.push({
             arn: group.Arn,
-            label: group.GroupName,
             accountId: group.Arn.split(":")[4],
-            config: group,
-            resourceType: "AWS::IAM::Group"
+            data: group,
+            resourceType: "aws:iam:group"
         })
     })
-    authDetails.roles.forEach((role: any) => {
-        resources.push({
-            arn: role.Arn,
-            label: role.RoleName,
-            accountId: role.Arn.split(":")[4],
-            config: _.omit(role, ['AssumeRolePolicyDocument', 'RolePolicyList']),
-            resourceType: "AWS::IAM::Role"
-        })
-    })
+    // authDetails.RoleDetailList.forEach((role: any) => {
+    //     resources.push({
+    //         arn: role.Arn,
+    //         accountId: role.Arn.split(":")[4],
+    //         data: role
+    //     })
+    // })
     // authDetails.Policies.forEach((policy: any) => {
     //     resources.push({
     //         arn: policy.Arn,

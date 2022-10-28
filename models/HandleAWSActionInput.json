@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "required": ["arn", "config", "action"],
+  "properties": {
+    "arn": {
+      "type": "string"
+    },
+    "config": {
+      "type": "object"
+    },
+    "action": {
+      "type": "string"
+    }
+  }
+}

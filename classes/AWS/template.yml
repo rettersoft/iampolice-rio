@@ -10,6 +10,10 @@ methods:
     type: QUEUED_WRITE
     handler: index.start
 
+  - method: cancelFetch
+    type: QUEUED_WRITE
+    handler: index.cancelFetch
+
   - method: startNextAccount
     type: QUEUED_WRITE
     handler: index.startNextAccount
@@ -31,6 +35,10 @@ methods:
     inputModel: AWSSecretsInput
     handler: index.setCredentials
 
+  - method: handleAction
+    type: WRITE
+    inputModel: HandleAWSActionInput
+    handler: index.handleAction
 
   - method: receiveWorkerEvents
     type: QUEUED_WRITE

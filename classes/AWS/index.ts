@@ -1,13 +1,37 @@
 import RDK, { Data, InitResponse, Response, StepResponse } from "@retter/rdk";
 import AWS from "aws-sdk";
-import { InitBody, StartIAMFetchInput, AWSSecretsInput, AWSWorkerEventBody } from './rio'
+import { InitBody, StartIAMFetchInput, AWSSecretsInput, AWSWorkerEventBody, HandleAWSActionInput } from './rio'
 import AWSHandler from './aws'
+import resourceTypes from './resourceTypes'
+
 const rdk = new RDK();
+
+const queryExamples = [
+    {
+        "description": "Find all IAM users without MFA enabled",
+        "query": "$[resourceType = 'AWS::IAM::User' and $count(config.mfaDevices) = 0]"
+    },
+    {
+        "description": "Find all IAM users with MFA enabled",
+        "query": "$[resourceType = 'AWS::IAM::User' and $count(config.mfaDevices) > 0]"
+    },
+    {
+        "description": "Find all IAM users with 'mike' in their names",
+        "query": "$[resourceType = 'AWS::IAM::User' and $contains(config.UserName, 'mike')]"
+    },
+    {
+        "description": "Find all IAM users with AdministratorAccess policy attached and no MFA devices",
+        "query": `$[resourceType = 'AWS::IAM::User' 
+            and $count(config.mfaDevices) = 0 
+            and config.AttachedManagedPolicies.PolicyName = 'AdministratorAccess']`
+    }
+]
 
 interface AWSResource {
     arn: string
+    label: string
     accountId: string
-    data: any
+    config: any
     resourceType: string
 }
 
@@ -60,6 +84,7 @@ interface AWSPrivateState {
         accessKeyId: string
         secretAccessKey: string
     }
+    fetchCancellation: "requested" | "none"
     awsResources: AWSResource[]
     iamUsers: any[]
     groups: any[]
@@ -92,7 +117,8 @@ export async function init(data: AWSData<InitBody>): Promise<Data> {
         errors: [],
         groups: [],
         roles: [],
-        policies: []
+        policies: [],
+        fetchCancellation: "none"
     }
     data.state.public.status = "idle"
     return data
@@ -111,13 +137,29 @@ export async function clear(data: AWSData): Promise<Data> {
     data.state.private.roles = []
     data.state.private.policies = []
     data.state.public.status = "idle"
+    data.state.private.fetchCancellation = "none"
 
+    return data
+}
+
+export async function handleAction(data: AWSData<HandleAWSActionInput>): Promise<Data> {
+    data.response = { statusCode: 200, body: { message: "not implemented yet" } }
+    return data
+}
+export async function cancelFetch(data: AWSData): Promise<Data> {
+    data.state.private.fetchCancellation = "requested"
     return data
 }
 
 export async function start(data: AWSData): Promise<Data> {
 
-    // data.state.public.status = "fetching_users"
+    // Reject if already running
+    if (data.state.public.status === "running") {
+        data.response = { statusCode: 400, body: { message: "Already running" } }
+        return data
+    }
+
+    data.state.public.status = "running"
 
     data.state.private.errors = []
     data.state.private.awsAccounts = []
@@ -148,11 +190,14 @@ export async function start(data: AWSData): Promise<Data> {
 
         // Also copy all aws accounts to awsResources
         data.state.private.awsResources = data.state.private.awsAccounts.map((account: AWSAccount) => {
+            let a = { ...account }
+            delete a.work
             return {
                 arn: account.arn,
+                label: account.email,
                 accountId: account.accountId,
-                data: account,
-                resourceType: "aws:organization:account"
+                config: a,
+                resourceType: "AWS::Organizations::Account"
             }
         })
     } catch (err) {
@@ -169,6 +214,19 @@ export async function start(data: AWSData): Promise<Data> {
 }
 
 export async function receiveWorkerEvents(data: AWSData<AWSWorkerEventBody>): Promise<Data> {
+
+    // if cancellation is requested, stop processing
+    if (data.state.private.fetchCancellation === "requested") {
+        data.state.public.status = "idle"
+        delete data.state.public.progress
+        data.state.private.fetchCancellation = "none"
+        return data
+    }
+
+    // Discard events if not running
+    if (data.state.public.status !== "running") {
+        return data
+    }
 
     // Find account for this event
     let account = data.state.private.awsAccounts.find(a => a.accountId === data.request.body.accountId)
@@ -221,9 +279,16 @@ export async function receiveWorkerEvents(data: AWSData<AWSWorkerEventBody>): Pr
     return data
 }
 
-
-
 export async function startNextAccount(data: AWSData): Promise<Data> {
+
+    // if cancellation is requested, stop processing
+    if (data.state.private.fetchCancellation === "requested") {
+        data.state.public.status = "idle"
+        delete data.state.public.progress
+        data.state.private.fetchCancellation = "none"
+        return data
+    }
+
     // Find first aws account with not_started status
     let account = data.state.private.awsAccounts.find((account: AWSAccount) => account.work.status === "not_started")
     account.work.status = "running"
@@ -288,120 +353,21 @@ export async function getSettings(data: AWSData): Promise<Data> {
             }
         }
     }
-    
+
     return data
 }
 
 export async function getResources(data: AWSData): Promise<Data> {
     data.response = {
         statusCode: 200,
-        body: data.state.private.awsResources
+        body: {
+            resourceTypes,
+            queryExamples,
+            "resources": data.state.private.awsResources
+        }
     }
     return data
 }
-
-// export async function handleSingleAWSAccount(data: IamData): Promise<Data> {
-
-
-
-
-//     try {
-
-//         const awsAccountId = data.state.private.awsAccounts.findIndex(a => a.Id === data.request.body.Id)
-//         data.state.private.awsAccounts[awsAccountId].processed = true
-
-//         const cancelFlag = await rdk.getMemory({
-//             key: "cancel"
-//         })
-
-//         // Send an event to Account class with current processing AWS Account Id
-//         await rdk.methodCall({
-//             classId: "Account",
-//             instanceId: data.context.instanceId,
-//             methodName: "handleEvents",
-//             body: {
-//                 IAM: {
-//                     status: cancelFlag.success ? "cancelled_cleaning_up" : "fetching_users",
-//                     awsAccountId: data.request.body.Id,
-//                     progress: {
-//                         current: data.state.private.awsAccounts.filter(a => a.processed).length,
-//                         total: data.state.private.awsAccounts.length,
-//                         str: data.state.private.awsAccounts.filter(a => a.processed).length + "/" + data.state.private.awsAccounts.length
-//                     }
-//                 }
-//             }
-//         })
-
-
-//         if (!cancelFlag.success) {
-
-//             const awsHandler = new AWSHandler(data.state.private.accessKeyId, data.state.private.accessKeySecret)
-
-//             console.log("handleSingleAWSAccount", data.request.body)
-
-//             let creds = await awsHandler.assumeAWSAccount(data.request.body)
-
-//             console.log("creds", creds)
-
-//             let {
-//                 users,
-//                 groups,
-//                 roles,
-//                 policies
-//             } = await awsHandler.getAccountAuthorizationDetails(creds)
-
-//             users = users.map(u => ({
-//                 ...u,
-//                 AccountId: data.request.body.Id
-//             }))
-
-
-//             data.state.private.awsAccounts[awsAccountId].userDetails = {
-//                 count: users.length,
-//             }
-
-//             data.state.private.iamUsers = data.state.private.iamUsers.concat(users)
-//             data.state.private.groups = data.state.private.groups.concat(groups)
-//             data.state.private.roles = data.state.private.roles.concat(roles)
-//             data.state.private.policies = data.state.private.policies.concat(policies)
-
-//         }
-
-//     } catch (err) {
-//         data.state.private.errors = data.state.private.errors.concat(err)
-//         console.log("err", err)
-//     }
-
-//     // Find out if every account is processed
-//     const allAccountsProcessed = data.state.private.awsAccounts.every(a => a.processed)
-//     // If all accounts are processed, send event to Account class
-//     if (allAccountsProcessed) {
-//         data.state.public.status = "idle"
-//         data.state.private.accessKeyId = undefined
-//         data.state.private.accessKeySecret = undefined
-//         await rdk.methodCall({
-//             classId: "Account",
-//             instanceId: data.context.instanceId,
-//             methodName: "handleEvents",
-//             body: {
-//                 IAM: {
-//                     status: "idle"
-//                 }
-//             }
-//         })
-//         await rdk.deleteMemory({
-//             key: "cancel"
-//         })
-//     }
-
-//     // console.log("data.state.private.iamUsers", data.state.private.iamUsers)
-
-//     return data
-// }
-
-// export async function fetchAwsAccount(data: IamData): Promise<Data> {
-//     return data
-// }
 
 export async function setCredentials(data: AWSData<AWSSecretsInput>): Promise<Data> {
     data.state.private.credentials = {
