@@ -2,6 +2,7 @@ init:
   handler: index.init
 getState: index.getState
 getInstanceId: index.getInstanceId
+authorizer: index.authorizer
 destinations:
   - id: firestore_dest
 methods:

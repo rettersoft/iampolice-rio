@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "required": ["accountId", "accessKeyId", "secretAccessKey", "userName"],
+  "properties": {
+    "accountId": {
+      "type": "string"
+    },
+    "accessKeyId": {
+      "type": "string"
+    },
+    "secretAccessKey": {
+      "type": "string"
+    },
+    "sessionToken": {
+      "type": "string"
+    },
+    "userName": {
+      "type": "string"
+    }
+    
+  }
+}

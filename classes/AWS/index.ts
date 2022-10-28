@@ -1,8 +1,13 @@
 import RDK, { Data, InitResponse, Response, StepResponse } from "@retter/rdk";
 import AWS from "aws-sdk";
-import { InitBody, StartIAMFetchInput, AWSSecretsInput, AWSWorkerEventBody, HandleAWSActionInput } from './rio'
+import {
+    InitBody, StartIAMFetchInput, AWSSecretsInput, AWSWorkerEventBody,
+    HandleAWSActionInput, DeleteUserInput
+} from './rio'
 import AWSHandler from './aws'
 import resourceTypes from './resourceTypes'
+
+const roleName = "OrganizationAccountAccessRole"
 
 const rdk = new RDK();
 
@@ -23,7 +28,7 @@ const queryExamples = [
         "description": "Find all IAM users with AdministratorAccess policy attached and no MFA devices",
         "query": `$[resourceType = 'AWS::IAM::User' 
             and $count(config.mfaDevices) = 0 
-            and config.AttachedManagedPolicies.PolicyName = 'AdministratorAccess']`
+            and config.AttachedManagedPolicies[PolicyName = "AdministratorAccess"]]`
     }
 ]
 
@@ -31,6 +36,7 @@ interface AWSResource {
     arn: string
     label: string
     accountId: string
+    accountEmail: string
     config: any
     resourceType: string
 }
@@ -105,7 +111,7 @@ export async function getInstanceId(data: Data<InitBody>): Promise<string> {
 }
 
 export async function authorizer(data: Data): Promise<Response> {
-    return { statusCode: 401 };
+    return { statusCode: 200 };
 }
 
 export async function init(data: AWSData<InitBody>): Promise<Data> {
@@ -143,9 +149,55 @@ export async function clear(data: AWSData): Promise<Data> {
 }
 
 export async function handleAction(data: AWSData<HandleAWSActionInput>): Promise<Data> {
+    const { action, arn, config } = data.request.body
+
+    const accountId = arn.split(":")[4]
+
+    // Assume AWS account
+    const credentials = data.state.private.credentials
+    const awsHandler = new AWSHandler(credentials.accessKeyId, credentials.secretAccessKey)
+    const roleCredentials = await awsHandler.assumeAWSAccount({
+        Id: accountId,
+    }, roleName)
+
+    switch (action) {
+        case "deleteIAMUser": {
+            
+            // Send a message to the worker to delete the user
+            const deleteInput: DeleteUserInput = {
+                accessKeyId: roleCredentials.AccessKeyId,
+                secretAccessKey: roleCredentials.SecretAccessKey,
+                sessionToken: roleCredentials.SessionToken,
+                accountId,
+                userName: config.UserName,
+            }
+            let AWSIAMWorker_response = await rdk.methodCall({
+                classId: "AWSIAMWorker",
+                instanceId: data.context.instanceId,
+                methodName: "deleteIAMUser",
+                body: deleteInput
+            })
+
+            // Remove the user from the state
+            data.state.private.iamUsers = data.state.private.iamUsers.filter((user: IamUser) => user.Arn !== arn)
+
+            // Send response to the client
+            data.response = {
+                statusCode: 200,
+                body: {
+                    message: AWSIAMWorker_response.body.message
+                }
+            }
+            return data
+        }
+
+    }
+
     data.response = { statusCode: 200, body: { message: "not implemented yet" } }
     return data
 }
+
+
 export async function cancelFetch(data: AWSData): Promise<Data> {
     data.state.private.fetchCancellation = "requested"
     return data
@@ -196,6 +248,7 @@ export async function start(data: AWSData): Promise<Data> {
                 arn: account.arn,
                 label: account.email,
                 accountId: account.accountId,
+                accountEmail: account.email,
                 config: a,
                 resourceType: "AWS::Organizations::Account"
             }
@@ -236,7 +289,13 @@ export async function receiveWorkerEvents(data: AWSData<AWSWorkerEventBody>): Pr
 
     // If this worker has finished add its data to awsResources in private state
     if (data.request.body.status === "finished") {
-        const resources: AWSResource[] = data.request.body.data as AWSResource[]
+        let resources: AWSResource[] = data.request.body.data as AWSResource[]
+        // Map resources to add account email address
+        resources = resources.map((resource: AWSResource) => {
+            resource.accountEmail = account.email
+            return resource
+        })
+        
         data.state.private.awsResources = data.state.private.awsResources.concat(resources)
     }
 
@@ -299,7 +358,7 @@ export async function startNextAccount(data: AWSData): Promise<Data> {
     try {
         const roleCredentials = await awsHandler.assumeAWSAccount({
             Id: account.accountId,
-        }, "OrganizationAccountAccessRole")
+        }, roleName)
 
         await rdk.getInstance({
             classId: "AWSIAMWorker",

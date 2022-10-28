@@ -1,6 +1,6 @@
 import RDK, { Data, InitResponse, Response, StepResponse } from "@retter/rdk";
 import AWS from "aws-sdk";
-import { InitBody, AWSSecretsInput, AWSWorkerStartInput } from './rio'
+import { InitBody, AWSSecretsInput, AWSWorkerStartInput, DeleteUserInput } from './rio'
 import AWSHandler from './aws'
 const rdk = new RDK();
 import _ from 'lodash'
@@ -24,7 +24,7 @@ interface IamUser {
 }
 
 interface AWSIAMWorkerDataPublicState {
-    
+
 }
 
 
@@ -43,7 +43,12 @@ export async function getInstanceId(data: Data<InitBody>): Promise<string> {
 }
 
 export async function authorizer(data: Data): Promise<Response> {
-    return { statusCode: 401 };
+
+    if(data.context.methodName === 'deleteIAMUser') {
+        return { statusCode: 401, body: { message: 'Unauthorized' } }
+    }
+
+    return { statusCode: 200 };
 }
 
 export async function init(data: AWSIAMWorkerData<InitBody>): Promise<Data> {
@@ -83,7 +88,7 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
         secretAccessKey: data.request.body.secretAccessKey,
         sessionToken: data.request.body.sessionToken
     })
-    
+
     const authDetails = await awsHandler.getAccountAuthorizationDetails()
 
     // Convert authDetails to a flat array of AWSResource objects
@@ -94,7 +99,14 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
             arn: user.Arn,
             accountId: user.Arn.split(":")[4],
             label: user.UserName,
-            config: user,
+            config: {
+                ...(_.omit(user, ["UserPolicyList"])),
+                UserPolicyList: user.UserPolicyList.map((policy) => {
+                    return {
+                        PolicyName: policy.PolicyName
+                    }
+                })
+            },
             resourceType: "AWS::IAM::User"
         })
     })
@@ -136,5 +148,33 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
         }
     })
 
+    return data
+}
+
+// implement deleteUser
+export async function deleteIAMUser(data: AWSIAMWorkerData<DeleteUserInput>): Promise<Data> {
+
+    const awsHandler = new AWSHandler({
+        accessKeyId: data.request.body.accessKeyId,
+        secretAccessKey: data.request.body.secretAccessKey,
+        sessionToken: data.request.body.sessionToken
+    })
+    try {
+        await awsHandler.deleteIAMUser(data.request.body.userName)
+        data.response = {
+            statusCode: 200,
+            body: {
+                message: "User deleted"
+            }
+        }
+    } catch(err) {
+        data.response = {
+            statusCode: 500,
+            body: {
+                message: err.message
+            }
+        }
+    }
+    
     return data
 }

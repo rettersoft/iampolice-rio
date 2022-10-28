@@ -2,11 +2,17 @@ init:
   handler: index.init
 getState: index.getState
 getInstanceId: index.getInstanceId
+authorizer: index.authorizer
 methods:
 
   - method: start
     type: QUEUED_WRITE
     inputModel: AWSWorkerStartInput
     handler: index.start
+
+  - method: deleteIAMUser
+    type: READ
+    inputModel: DeleteUserInput
+    handler: index.deleteIAMUser
 
 

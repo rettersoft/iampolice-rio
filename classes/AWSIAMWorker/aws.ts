@@ -80,6 +80,136 @@ export default class AWSHandler {
         }
     }
 
+    deleteIAMUser = async (UserName: string) => {
+
+        const iam = new AWS.IAM({
+            credentials: this.credentials
+        })
+
+        // First delete login profile for this user
+        try {
+            await iam.deleteLoginProfile({
+                UserName
+            }).promise()
+        } catch (err) {
+
+        }
+
+
+        // list all access keys for this user
+        let accessKeysResp = await iam.listAccessKeys({
+            UserName
+        }).promise()
+
+        // delete all access keys for this user
+        for (let accessKey of accessKeysResp.AccessKeyMetadata) {
+            try {
+                await iam.deleteAccessKey({
+                    UserName,
+                    AccessKeyId: accessKey.AccessKeyId
+                }).promise()
+            } catch (err) {
+
+            }
+
+        }
+
+        // list all attached policies for this user
+        let attachedPoliciesResp = await iam.listAttachedUserPolicies({
+            UserName
+        }).promise()
+
+        // detach all attached policies for this user
+        for (let attachedPolicy of attachedPoliciesResp.AttachedPolicies) {
+            try {
+                await iam.detachUserPolicy({
+                    UserName,
+                    PolicyArn: attachedPolicy.PolicyArn
+                }).promise()
+            } catch (err) {
+
+            }
+
+        }
+
+        // list all groups for this user
+        let groupsResp = await iam.listGroupsForUser({
+            UserName
+        }).promise()
+
+        // remove this user from all groups
+        for (let group of groupsResp.Groups) {
+            try {
+                await iam.removeUserFromGroup({
+                    UserName,
+                    GroupName: group.GroupName
+                }).promise()
+            } catch (err) {
+
+            }
+
+        }
+
+        // list all signing certificates for this user
+        let signingCertificatesResp = await iam.listSigningCertificates({
+            UserName
+        }).promise()
+
+        // delete all signing certificates for this user
+        for (let signingCertificate of signingCertificatesResp.Certificates) {
+            try {
+                await iam.deleteSigningCertificate({
+                    UserName,
+                    CertificateId: signingCertificate.CertificateId
+                }).promise()
+            } catch (err) {
+
+            }
+
+        }
+
+        // list all ssh public keys for this user
+        let sshPublicKeysResp = await iam.listSSHPublicKeys({
+            UserName
+        }).promise()
+
+        // delete all ssh public keys for this user
+        for (let sshPublicKey of sshPublicKeysResp.SSHPublicKeys) {
+            try {
+                await iam.deleteSSHPublicKey({
+                    UserName,
+                    SSHPublicKeyId: sshPublicKey.SSHPublicKeyId
+                }).promise()
+            } catch (err) {
+
+            }
+
+        }
+
+        // list all mfa devices for this user
+        let mfaDevicesResp = await iam.listMFADevices({
+            UserName
+        }).promise()
+
+        // delete all mfa devices for this user
+        for (let mfaDevice of mfaDevicesResp.MFADevices) {
+            try {
+                await iam.deactivateMFADevice({
+                    UserName,
+                    SerialNumber: mfaDevice.SerialNumber
+                }).promise()
+            } catch (err) {
+
+            }
+
+        }
+
+        // delete this user
+        await iam.deleteUser({
+            UserName
+        }).promise()
+    }
+
 
 }
 
