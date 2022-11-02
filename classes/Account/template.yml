@@ -27,6 +27,23 @@ methods:
     type: QUEUED_WRITE
     handler: index.handleEvents
 
+  - method: getSubscriptionInfo
+    type: WRITE
+    handler: index.getSubscriptionInfo
+
+  - method: updateStripeSubscription
+    type: QUEUED_WRITE
+    handler: index.updateStripeSubscription
+  
+  - method: createStripeCheckoutSession
+    type: WRITE
+    handler: index.createStripeCheckoutSession
+
+  - method: changeStripeSubscriptionPlan
+    type: WRITE
+    handler: index.changeStripeSubscriptionPlan
+
+
   # - method: fetchUsers
   #   type: WRITE
   #   handler: index.fetchUsers

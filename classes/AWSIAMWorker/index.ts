@@ -44,7 +44,7 @@ export async function getInstanceId(data: Data<InitBody>): Promise<string> {
 
 export async function authorizer(data: Data): Promise<Response> {
 
-    if(data.context.methodName === 'deleteIAMUser') {
+    if (data.context.methodName === 'deleteIAMUser') {
         return { statusCode: 401, body: { message: 'Unauthorized' } }
     }
 
@@ -167,7 +167,7 @@ export async function deleteIAMUser(data: AWSIAMWorkerData<DeleteUserInput>): Pr
                 message: "User deleted"
             }
         }
-    } catch(err) {
+    } catch (err) {
         data.response = {
             statusCode: 500,
             body: {
@@ -175,6 +175,34 @@ export async function deleteIAMUser(data: AWSIAMWorkerData<DeleteUserInput>): Pr
             }
         }
     }
-    
+
+    return data
+}
+
+// implement deleteUnusedAccessKeys
+export async function deleteUnusedAccessKeysForUser(data: AWSIAMWorkerData<DeleteUserInput>): Promise<Data> {
+
+    const awsHandler = new AWSHandler({
+        accessKeyId: data.request.body.accessKeyId,
+        secretAccessKey: data.request.body.secretAccessKey,
+        sessionToken: data.request.body.sessionToken
+    })
+    try {
+        await awsHandler.deleteUnusedAccessKeysForUser(data.request.body.userName)
+        data.response = {
+            statusCode: 200,
+            body: {
+                message: "Unused access keys deleted"
+            }
+        }
+    } catch (err) {
+        data.response = {
+            statusCode: 500,
+            body: {
+                message: err.message
+            }
+        }
+    }
+
     return data
 }

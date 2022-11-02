@@ -15,4 +15,9 @@ methods:
     inputModel: DeleteUserInput
     handler: index.deleteIAMUser
 
+  - method: deleteUnusedAccessKeysForUser
+    type: READ
+    inputModel: DeleteUserInput
+    handler: index.deleteUnusedAccessKeysForUser
+
 

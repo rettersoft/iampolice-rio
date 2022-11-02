@@ -27,7 +27,21 @@ export default class AWSHandler {
             UserName: user.UserName
         }).promise()
 
+        // List access keys for user
+        let accessKeysResp = await iam.listAccessKeys({
+            UserName: user.UserName
+        }).promise()
+
         user.mfaDevices = mfaDevicesResp.MFADevices
+        user.accessKeys = accessKeysResp.AccessKeyMetadata
+
+        // Fill last used date for access keys
+        for (let accessKey of user.accessKeys) {
+            let accessKeyLastUsedResp = await iam.getAccessKeyLastUsed({
+                AccessKeyId: accessKey.AccessKeyId
+            }).promise()
+            accessKey.AccessKeyLastUsed = accessKeyLastUsedResp.AccessKeyLastUsed
+        }
     }
 
     getAccountAuthorizationDetails = async (): Promise<any> => {
@@ -210,6 +224,38 @@ export default class AWSHandler {
         }).promise()
     }
 
+    // Implement deleteUnusedAccessKeys
+    deleteUnusedAccessKeysForUser = async (UserName: string) => {
+
+        const iam = new AWS.IAM({
+            credentials: this.credentials
+        })
+
+        // list all access keys for this user
+        let accessKeysResp = await iam.listAccessKeys({
+            UserName
+        }).promise()
+
+        // delete all access keys for this user
+        for (let accessKey of accessKeysResp.AccessKeyMetadata) {
+            // Get lastUsed info for access key
+            let accessKeyLastUsedResp = await iam.getAccessKeyLastUsed({
+                AccessKeyId: accessKey.AccessKeyId
+            }).promise()
+            
+            // If lastUsed date does not exist, then delete this access key
+            if (!accessKeyLastUsedResp.AccessKeyLastUsed.LastUsedDate) {
+                try {
+                    await iam.deleteAccessKey({
+                        UserName,
+                        AccessKeyId: accessKey.AccessKeyId
+                    }).promise()
+                } catch (err) {
+
+                }
+            }
+        }
+    }
 
 }
 

@@ -190,6 +190,30 @@ export async function handleAction(data: AWSData<HandleAWSActionInput>): Promise
             }
             return data
         }
+        case "deleteUnusedAccessKeysForUser": {
+            // Send a message to the worker to delete a users unused access keys
+            const deleteInput: DeleteUserInput = {
+                accessKeyId: roleCredentials.AccessKeyId,
+                secretAccessKey: roleCredentials.SecretAccessKey,
+                sessionToken: roleCredentials.SessionToken,
+                accountId,
+                userName: config.UserName,
+            }
+            let AWSIAMWorker_response = await rdk.methodCall({
+                classId: "AWSIAMWorker",
+                instanceId: data.context.instanceId,
+                methodName: "deleteUnusedAccessKeysForUser",
+                body: deleteInput
+            })
+            // Send response to the client
+            data.response = {
+                statusCode: 200,
+                body: {
+                    message: AWSIAMWorker_response.body.message
+                }
+            }
+            return data
+        }
 
     }
 

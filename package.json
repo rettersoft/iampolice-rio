@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc -b .",
-    "deploy": "rio deploy --ignore-approval --profile riodev"
+    "deploy": "rio deploy --ignore-approval --profile starbucks"
   },
   "keywords": [],
   "author": "",

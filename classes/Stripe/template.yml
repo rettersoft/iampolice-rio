@@ -1,0 +1,11 @@
+init: 
+  handler: index.init
+  # inputModel: InitBody
+getState: index.getState
+getInstanceId: index.getInstanceId
+methods:
+
+
+  - method: webhookHandler
+    type: QUEUED_WRITE
+    handler: index.webhookHandler

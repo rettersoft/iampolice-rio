@@ -1,4 +1,9 @@
 export default {
+    "AWS::Organizations::Account": {
+        "label": "AWS Account",
+        "actions": [
+        ]
+    },
     "AWS::IAM::User": {
         "label": "IAM User",
         "actions": [
@@ -7,8 +12,8 @@ export default {
                 "action": "deleteIAMUser"
             },
             {
-                "label": "Disable",
-                "action": "disableIAMUser"
+                "label": "Delete Unused Access Keys",
+                "action": "deleteUnusedAccessKeysForUser"
             }
         ]
     },
