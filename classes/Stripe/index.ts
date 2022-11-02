@@ -28,21 +28,18 @@ export async function getState(data: Data): Promise<Response> {
     return { statusCode: 200, body: data.state };
 }
 
-
-
-
-
 export async function webhookHandler(data: Data): Promise<Data> {
 
-    const sig = data.request.headers['stripe-signature'];
+    console.log("data.context.pathParameters", JSON.stringify(data.context.pathParameters))
 
-    let event = data.request.body;
-
-    console.log("event", JSON.stringify(event))
-
-    console.log("event type", event.type)
-
-
+    const API_KEY = process.env.STRIPE_WEBHOOK_HANDLER_APIKEY
+    
+    // Check path parameters to see if it contains the API key
+    if (data.context.pathParameters && data.context.pathParameters.path.indexOf(API_KEY) === -1) {
+        // Dont handle this event
+        console.log("Invalid API KEY. Skipping event...")
+        return data
+    }
 
 
     // try {
@@ -56,9 +53,16 @@ export async function webhookHandler(data: Data): Promise<Data> {
     //     // }
     // }
 
-
-
     try {
+
+        const sig = data.request.headers['stripe-signature'];
+
+        let event = data.request.body;
+
+        console.log("event", JSON.stringify(event))
+
+        console.log("event type", event.type)
+
         // Handle the events
         switch (event.type) {
             case 'customer.subscription.created':

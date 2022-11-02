@@ -1,5 +1,5 @@
 import RDK, { Data, InitResponse, Response, StepResponse } from "@retter/rdk";
-import { InitBody, VerifyOtpInput, AWSSecretsInput } from './rio'
+import { InitBody, VerifyOtpInput, AWSSecretsInput, ChangePlanInput, CancelSubscriptionInput } from './rio'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -37,7 +37,7 @@ enum StripePrice {
     PRO_MONTHLY = "pro_monthly",
     PRO_ANNUALLY = "pro_annually",
     STARTUP_MONTHLY = "startup_monthly",
-    STARTUP_ANNUALLY = "startup_annally"
+    STARTUP_ANNUALLY = "startup_annually"
 }
 
 interface AccountPrivateState {
@@ -48,12 +48,15 @@ interface AccountPrivateState {
         customerId: string
         subscription?: any
         curentStripePrice?: StripePrice
+        cancelReason?: string
     }
     otp?: {
         code: string
         createdAt: string
     }
 }
+
+
 
 interface AccountData<I = any, O = any> extends Data<I, O, AccountPublicState, AccountPrivateState> {
 
@@ -139,13 +142,6 @@ export async function verifyOtp(data: AccountData<VerifyOtpInput>): Promise<Data
     return data
 }
 
-
-// changeAccountTier implementation
-export async function changeAccountTier(data: AccountData): Promise<Data> {
-    data.state.private.accountTier = data.request.body.accountTier
-    return data
-}
-
 export async function reset(data: AccountData): Promise<Data> {
     data.state.public.IAM = {
         status: "idle"
@@ -214,7 +210,7 @@ const createStripeUser = async (email: string) => {
 }
 
 // changeStripeSubscriptionPlan
-export async function changeStripeSubscriptionPlan(data: AccountData): Promise<Data> {
+export async function changeStripeSubscriptionPlan(data: AccountData<ChangePlanInput>): Promise<Data> {
 
     if (data.state.private.accountTier === AccountTier.FREE) {
         data.response = {
@@ -236,6 +232,16 @@ export async function changeStripeSubscriptionPlan(data: AccountData): Promise<D
         { query: `metadata['price_id']: "${price_id}"` }
     )
 
+    // Check if current price_id is the same as the new one
+    
+    if (data.state.public.subscriptionSummary.curentStripePrice.toString() === price_id) {
+        data.response = {
+            statusCode: 400,
+            body: { message: "You are already subscribed to this plan" }
+        }
+        return data
+    }
+
     const subscription = await stripe.subscriptions.retrieve(data.state.private.stripe.subscription.id);
     await stripe.subscriptions.update(subscription.id, {
         cancel_at_period_end: false,
@@ -249,7 +255,7 @@ export async function changeStripeSubscriptionPlan(data: AccountData): Promise<D
     return data
 }
 
-export async function createStripeCheckoutSession(data: AccountData): Promise<Data> {
+export async function createStripeCheckoutSession(data: AccountData<ChangePlanInput>): Promise<Data> {
 
     // Check if currently a subscription is active, if so return error code
     if (data.state.private.accountTier !== AccountTier.FREE) {
@@ -412,7 +418,7 @@ export async function updateStripeSubscription(data: AccountData): Promise<Data>
 
 
 // cancelStripeSubscription
-export async function cancelStripeSubscription(data: AccountData): Promise<Data> {
+export async function cancelStripeSubscription(data: AccountData<CancelSubscriptionInput>): Promise<Data> {
 
     const subscriptionId = data.state.private.stripe?.subscription.id
 
@@ -422,9 +428,13 @@ export async function cancelStripeSubscription(data: AccountData): Promise<Data>
     }
 
     const deleted = await stripe.subscriptions.del(subscriptionId, {
-        invoice_now: true
+        invoice_now: true,
     })
+    
     if (deleted) {
+        
+        data.state.private.stripe.cancelReason = data.request.body.reason
+        
         data.response = {
             statusCode: 200,
             body: {

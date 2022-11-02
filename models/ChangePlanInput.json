@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "required": ["price_id"],
+  "properties": {
+    "price_id": {
+      "type": "string",
+      "enum": ["pro_monthly", "pro_annually", "startup_monthly", "startup_annually"]
+    }
+  }
+}
