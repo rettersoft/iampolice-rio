@@ -27,10 +27,6 @@ methods:
     type: QUEUED_WRITE
     handler: index.handleEvents
 
-  - method: getSubscriptionInfo
-    type: WRITE
-    handler: index.getSubscriptionInfo
-
   - method: updateStripeSubscription
     type: QUEUED_WRITE
     handler: index.updateStripeSubscription
@@ -43,6 +39,9 @@ methods:
     type: WRITE
     handler: index.changeStripeSubscriptionPlan
 
+  - method: cancelStripeSubscription
+    type: WRITE
+    handler: index.cancelStripeSubscription
 
   # - method: fetchUsers
   #   type: WRITE

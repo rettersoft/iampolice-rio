@@ -23,6 +23,7 @@ interface AccountPublicState {
         current_period_start: number
         current_period_end: number
         interval_count: number
+        curentStripePrice: StripePrice
     }
 }
 
@@ -32,7 +33,12 @@ enum AccountTier {
     PRO = "pro"
 }
 
-
+enum StripePrice {
+    PRO_MONTHLY = "pro_monthly",
+    PRO_ANNUALLY = "pro_annually",
+    STARTUP_MONTHLY = "startup_monthly",
+    STARTUP_ANNUALLY = "startup_annally"
+}
 
 interface AccountPrivateState {
     email: string
@@ -41,6 +47,7 @@ interface AccountPrivateState {
     stripe?: {
         customerId: string
         subscription?: any
+        curentStripePrice?: StripePrice
     }
     otp?: {
         code: string
@@ -199,56 +206,11 @@ export async function handleEvents(data: AccountData): Promise<Data> {
     return data
 }
 
-
-// getAccountData
-export async function getSubscriptionInfo(data: AccountData): Promise<Data> {
-
-    if (data.state.private.stripe === undefined) {
-        // Create stripe user
-        const customerId = await createStripeUser(data.state.private.email)
-        data.state.private.stripe = {
-            customerId
-        }
-        await rdk.setLookUpKey({
-            key: {
-                name: "stripeCustomerId",
-                value: customerId
-            }
-        })
-    }
-
-    data.response = {
-        statusCode: 200,
-        body: {
-            email: data.state.private.email,
-            accountTier: data.state.private.accountTier,
-            subscription: data.state.private.subscription,
-            stripe: data.state.private.stripe
-        }
-    }
-
-    return data
-}
-
 const createStripeUser = async (email: string) => {
     const customer = await stripe.customers.create({
         email
     })
     return customer.id
-}
-
-const findTierByStripePlan = (plan: any): AccountTier => {
-    if (plan.metadata.price_id === "pro_annually") {
-        return AccountTier.PRO
-    } else if (plan.metadata.price_id === "pro_monthly") {
-        return AccountTier.PRO
-    } else if (plan.metadata.price_id === "startup_monthly") {
-        return AccountTier.STARTUP
-    } else if (plan.metadata.price_id === "startup_annually") {
-        return AccountTier.STARTUP
-    } else {
-        return AccountTier.FREE
-    }
 }
 
 // changeStripeSubscriptionPlan
@@ -269,13 +231,18 @@ export async function changeStripeSubscriptionPlan(data: AccountData): Promise<D
         }
     }
 
+    const { price_id } = data.request.body
+    const prices = await stripe.prices.search(
+        { query: `metadata['price_id']: "${price_id}"` }
+    )
+
     const subscription = await stripe.subscriptions.retrieve(data.state.private.stripe.subscription.id);
-    stripe.subscriptions.update('sub_49ty4767H20z6a', {
+    await stripe.subscriptions.update(subscription.id, {
         cancel_at_period_end: false,
         proration_behavior: 'create_prorations',
         items: [{
             id: subscription.items.data[0].id,
-            price: 'price_CBb6IXqvTLXp3f',
+            price: prices.data[0].id,
         }]
     });
 
@@ -298,10 +265,17 @@ export async function createStripeCheckoutSession(data: AccountData): Promise<Da
         // Check stripe data. If no stripe user is created before, create one
         stripeCustomerId = data.state.private.stripe?.customerId
         if (!stripeCustomerId) {
-            data.response = {
-                statusCode: 500, body: { message: "Stripe account not found" }
+            // Create stripe user
+            stripeCustomerId = await createStripeUser(data.state.private.email)
+            data.state.private.stripe = {
+                customerId: stripeCustomerId
             }
-            return data
+            await rdk.setLookUpKey({
+                key: {
+                    name: "stripeCustomerId",
+                    value: stripeCustomerId
+                }
+            })
         }
 
         console.log("stripeCustomerId", stripeCustomerId)
@@ -397,9 +371,18 @@ export async function updateStripeSubscription(data: AccountData): Promise<Data>
 
             const { plan } = subscription
 
-            const accountTier = findTierByStripePlan(plan)
+            let accountTier = AccountTier.FREE
+
+            if (plan.metadata.price_id === StripePrice.PRO_MONTHLY
+                || plan.metadata.price_id === StripePrice.PRO_ANNUALLY) {
+                accountTier = AccountTier.PRO
+            } else if (plan.metadata.price_id === StripePrice.STARTUP_MONTHLY
+                || plan.metadata.price_id === StripePrice.STARTUP_ANNUALLY) {
+                accountTier = AccountTier.STARTUP
+            }
 
             data.state.private.accountTier = accountTier
+            data.state.private.stripe.curentStripePrice = plan.metadata.price_id
             data.state.public.accountTier = accountTier
             data.state.public.subscriptionSummary = {
                 amount_decimal: plan.amount_decimal,
@@ -409,6 +392,7 @@ export async function updateStripeSubscription(data: AccountData): Promise<Data>
                 interval_count: plan.interval_count,
                 current_period_start: subscription.current_period_start,
                 current_period_end: subscription.current_period_end,
+                curentStripePrice: plan.metadata.price_id
             }
 
             break
@@ -420,6 +404,39 @@ export async function updateStripeSubscription(data: AccountData): Promise<Data>
             delete data.state.public.subscriptionSummary
 
             break
+        }
+    }
+
+    return data
+}
+
+
+// cancelStripeSubscription
+export async function cancelStripeSubscription(data: AccountData): Promise<Data> {
+
+    const subscriptionId = data.state.private.stripe?.subscription.id
+
+    if (!subscriptionId) {
+        data.response = { statusCode: 400, body: { message: "No subscription found." } }
+        return data
+    }
+
+    const deleted = await stripe.subscriptions.del(subscriptionId, {
+        invoice_now: true
+    })
+    if (deleted) {
+        data.response = {
+            statusCode: 200,
+            body: {
+                message: "Subscription canceled"
+            }
+        }
+    } else {
+        data.response = {
+            statusCode: 500,
+            body: {
+                message: "Unable to cancel subscription"
+            }
         }
     }
 
