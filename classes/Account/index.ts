@@ -518,3 +518,14 @@ export async function getSubscriptionPlans(data: AccountData): Promise<Data> {
     }
     return data
 }
+
+// A method returning account tier
+export async function getAccountTier(data: AccountData): Promise<Data> {
+    data.response = {
+        statusCode: 200,
+        body: {
+            accountTier: data.state.public.accountTier
+        }
+    }
+    return data
+}

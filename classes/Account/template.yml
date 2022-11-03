@@ -45,6 +45,10 @@ methods:
     type: STATIC
     handler: index.getSubscriptionPlans
 
+  - method: getAccountTier
+    type: READ
+    handler: index.getAccountTier
+
   # - method: fetchUsers
   #   type: WRITE
   #   handler: index.fetchUsers
