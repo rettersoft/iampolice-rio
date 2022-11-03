@@ -532,6 +532,7 @@ export async function getSettings(data: AWSData): Promise<Data> {
 }
 
 export async function getResources(data: AWSData): Promise<Data> {
+    
     data.response = {
         statusCode: 200,
         body: {
@@ -543,7 +544,8 @@ export async function getResources(data: AWSData): Promise<Data> {
                 arn: a.arn,
                 email: a.email,
                 errorStr: a.work.errorStr
-            })).flat()
+            })).flat(),
+            numberOfAWSAccounts: data.state.private.numberOfAWSAccounts
         }
     }
     return data
