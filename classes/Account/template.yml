@@ -41,6 +41,10 @@ methods:
     inputModel: CancelSubscriptionInput
     handler: index.cancelStripeSubscription
 
+  - method: getSubscriptionPlans
+    type: STATIC
+    handler: index.getSubscriptionPlans
+
   # - method: fetchUsers
   #   type: WRITE
   #   handler: index.fetchUsers

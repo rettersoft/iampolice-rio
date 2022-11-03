@@ -10,6 +10,8 @@ const YOUR_DOMAIN = 'www.iampolice.com'
 
 const rdk = new RDK();
 
+
+
 interface AccountPublicState {
     IAM: {
         status: "idle" | "fetching_users"
@@ -39,6 +41,56 @@ enum StripePrice {
     STARTUP_MONTHLY = "startup_monthly",
     STARTUP_ANNUALLY = "startup_annually"
 }
+
+interface SubscriptionPlan {
+    price_id?: StripePrice
+    name: string
+    description: string
+    priceStr: string
+    isFree: boolean
+    interval?: "month" | "year"
+}
+
+const subsctionPlans : SubscriptionPlan[] = [
+    {
+        name: "Free",
+        description: "Free plan",
+        priceStr: "Free",
+        isFree: true
+    },
+    {
+        price_id: StripePrice.PRO_MONTHLY,
+        name: "Pro Monthly",
+        description: "Pro Monthly",
+        priceStr: "$49/month",
+        isFree: false,
+        interval: "month"
+    },
+    {
+        price_id: StripePrice.PRO_ANNUALLY,
+        name: "Pro Annually",
+        description: "Pro Annually",
+        priceStr: "$499/year",
+        isFree: false,
+        interval: "year"
+    },
+    {
+        price_id: StripePrice.STARTUP_MONTHLY,
+        name: "Startup Monthly",
+        description: "Startup Monthly",
+        priceStr: "$19/month",
+        isFree: false,
+        interval: "month"
+    },
+    {
+        price_id: StripePrice.STARTUP_ANNUALLY,
+        name: "Startup Annually",
+        description: "Startup Annually",
+        priceStr: "$199/year",
+        isFree: false,
+        interval: "year"
+    }
+]
 
 interface AccountPrivateState {
     email: string
@@ -450,5 +502,19 @@ export async function cancelStripeSubscription(data: AccountData<CancelSubscript
         }
     }
 
+    return data
+}
+
+// getSubscriptionPlans
+
+export async function getSubscriptionPlans(data: AccountData): Promise<Data> {
+    data.response = {
+        statusCode: 200,
+        body: subsctionPlans,
+        headers: {
+            // Cache response for 5 minutes
+            "Cache-Control": "public, max-age=300, s-maxage=600"
+        }
+    }
     return data
 }

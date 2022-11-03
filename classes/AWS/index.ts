@@ -61,6 +61,10 @@ interface IamUser {
 
 interface AWSPublicState {
     status: "running" | "idle";
+    maskedCredentials?: {
+        accessKeyId: string;
+        secretAccessKey: string;
+    },
     progress?: {
         finished: number
         total: number
@@ -419,7 +423,10 @@ export async function startNextAccount(data: AWSData): Promise<Data> {
     return data
 }
 
-
+// A function to mask input string
+function maskString(str: string): string {
+    return str.substring(0, 4) + "****" + str.substring(str.length - 4)
+}
 
 export async function getSettings(data: AWSData): Promise<Data> {
 
@@ -430,8 +437,8 @@ export async function getSettings(data: AWSData): Promise<Data> {
             statusCode: 200,
             body: {
                 credentials: {
-                    accessKeyId: credentials.accessKeyId.substring(0, 4) + "****" + credentials.accessKeyId.substring(credentials.accessKeyId.length - 4),
-                    secretAccessKey: credentials.secretAccessKey.substring(0, 4) + "****" + credentials.secretAccessKey.substring(credentials.secretAccessKey.length - 4)
+                    accessKeyId: maskString(credentials.accessKeyId),
+                    secretAccessKey: maskString(credentials.secretAccessKey)
                 }
             }
         }
@@ -456,6 +463,10 @@ export async function setCredentials(data: AWSData<AWSSecretsInput>): Promise<Da
     data.state.private.credentials = {
         accessKeyId: data.request.body.accessKeyId,
         secretAccessKey: data.request.body.secretAccessKey
+    }
+    data.state.public.maskedCredentials = {
+        accessKeyId: maskString(data.request.body.accessKeyId),
+        secretAccessKey: maskString(data.request.body.secretAccessKey)
     }
     data.response = {
         statusCode: 200,
