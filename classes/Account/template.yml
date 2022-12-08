@@ -3,6 +3,7 @@ init:
   inputModel: InitBody
 getState: index.getState
 getInstanceId: index.getInstanceId
+authorizer: index.authorizer
 methods:
 
   - method: sendOtp
@@ -48,6 +49,10 @@ methods:
   - method: getAccountTier
     type: READ
     handler: index.getAccountTier
+
+  - method: makePro
+    type: WRITE
+    handler: index.makePro
 
   # - method: fetchUsers
   #   type: WRITE

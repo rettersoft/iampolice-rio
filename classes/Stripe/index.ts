@@ -6,11 +6,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: '2022-08-01'
 })
 
-
+const API_KEY = process.env.STRIPE_WEBHOOK_HANDLER_APIKEY
 
 const rdk = new RDK();
-
+ 
 export async function authorizer(data: Data): Promise<Response> {
+
+    // Check path parameters to see if it contains the API key
+    if (data.context.pathParameters && data.context.pathParameters.path.indexOf(API_KEY) !== -1) {
+        return { statusCode: 200 }
+    }
 
     return { statusCode: 401 };
 }
@@ -31,16 +36,6 @@ export async function getState(data: Data): Promise<Response> {
 export async function webhookHandler(data: Data): Promise<Data> {
 
     console.log("data.context.pathParameters", JSON.stringify(data.context.pathParameters))
-
-    const API_KEY = process.env.STRIPE_WEBHOOK_HANDLER_APIKEY
-    
-    // Check path parameters to see if it contains the API key
-    if (data.context.pathParameters && data.context.pathParameters.path.indexOf(API_KEY) === -1) {
-        // Dont handle this event
-        console.log("Invalid API KEY. Skipping event...")
-        return data
-    }
-
 
     // try {
     //     event = stripe.webhooks.constructEvent(JSON.stringify(request.body), sig, endpointSecret);

@@ -17,6 +17,10 @@ const queryExamples = [
         "query": "$[resourceType = 'AWS::IAM::User' and $count(config.mfaDevices) = 0]"
     },
     {
+        "description": "Find all root users without MFA enabled",
+        "query": "$[resourceType = 'AWS::IAM::User' and $count(config.mfaDevices) = 0 and label = 'root']"
+    },
+    {
         "description": "Find all IAM users with MFA enabled",
         "query": "$[resourceType = 'AWS::IAM::User' and $count(config.mfaDevices) > 0]"
     },
@@ -125,12 +129,70 @@ interface AWSData<I = any, O = any> extends Data<I, O, AWSPublicState, AWSPrivat
 
 }
 
-export async function getInstanceId(data: Data<InitBody>): Promise<string> {
-    return data.request.body.email
+export async function getInstanceId(data: Data): Promise<string> {
+    console.log("getInstanceId", data)
+    return data.context.userId
 }
 
+const ALLOWED_METHOD_NAMES_FOR_OWNER = [
+    "start",
+    "cancelFetch",
+    "getSettings",
+    "getResources",
+    "setCredentials",
+    "clearCredentials",
+    "GET",
+    "INIT",
+    "handleAction"
+]
+
+const ALLOWED_METHOD_NAMES_FOR_AWSIAMWorker = [
+    "receiveWorkerEvents"
+]
+
+/* Authorization function */
+/* 
+1. We allow the developer identity to call all methods
+2. We allow the INIT method to be called by anyone
+3. We allow the enduser identity to call methods in the ALLOWED_METHOD_NAMES_FOR_OWNER array
+4. We allow the AWSIAMWorker identity to call methods in ALLOWED_METHOD_NAMES_FOR_AWSIAMWorker array
+5. We allow the AWS identity to call the startNextAccount method only if the userId and instanceId are the same 
+*/
 export async function authorizer(data: Data): Promise<Response> {
-    return { statusCode: 200 };
+
+    console.log("authorizer", JSON.stringify(data.context))
+
+    // Allow user in developer identity to call all methods
+    if(data.context.identity === "developer") {
+        return { statusCode: 200 }
+    }
+
+    if(data.context.methodName === "INIT") {
+        return { statusCode: 200 }
+    }
+
+    if(data.context.identity === "enduser" && data.context.userId === data.context.instanceId) {
+        // Check if method name is one of the allowed ones
+        if(ALLOWED_METHOD_NAMES_FOR_OWNER.includes(data.context.methodName)) {
+            return { statusCode: 200 }
+        }
+    } 
+
+    // Allow AWSIAMWorker identity to call methods in ALLOWED_METHOD_NAMES_FOR_AWSIAMWorker
+    if(data.context.identity === "AWSIAMWorker") {
+        if(ALLOWED_METHOD_NAMES_FOR_AWSIAMWorker.includes(data.context.methodName)) {
+            return { statusCode: 200 }
+        }
+    }
+
+    if(data.context.identity === "AWS" 
+        && data.context.methodName === "startNextAccount"
+        && data.context.instanceId === data.context.userId) {
+        return { statusCode: 200 }
+    }
+
+    console.log("NOT AUTHORIZED")
+    return { statusCode: 401 };
 }
 
 export async function init(data: AWSData<InitBody>): Promise<Data> {
@@ -189,6 +251,24 @@ function getMaxAccountNumberByAccountTier(accountTier: string): number {
 
 }
 
+/**
+* A function to start gathering AWS IAM data
+* 1. We check if the method is already running, and if so, we reject the request.
+* 2. We set the status to "running".
+* 3. We set up the state properties for holding the data we are going to fetch.
+* 4. We create an instance of the AWSHandler class, which is a class that we created to simplify the use of the AWS SDK.
+* 5. We fetch the accounts using the getAllAWSAccountsInOrganization() method.
+* 6. We check if the user is allowed to fetch all accounts, or if we should limit the number of accounts fetched.
+*    If the user is allowed to fetch all accounts, we set the numberOfAccountsToFetch to the total number of accounts.
+*    If the user is not allowed to fetch all accounts, we set the numberOfAccountsToFetch to the maximum number of accounts
+*    allowed for the users account tier.
+* 7. We set the numberOfAWSAccounts property in state.private to the total number of accounts in the organization,
+*    and the numberOfAccountsToFetch property to the number of accounts we are allowed to fetch.
+* 8. We loop through the accounts, and create an array of accounts with the work property set to "not_started".
+* 9. We also add all the accounts to the awsResources array.
+* 10. If an error occurs, we add the error to the errors array, and return the data object.
+* 11. If everything went well, we set up the tasks array, and set the first task to startNextAccount. 
+*/
 export async function start(data: AWSData): Promise<Data> {
 
     console.log("data.context.methodName", data.context.methodName)
@@ -288,6 +368,7 @@ export async function start(data: AWSData): Promise<Data> {
     return data
 }
 
+
 export async function startNextAccount(data: AWSData): Promise<Data> {
 
     console.log("data.context.methodName", data.context.methodName)
@@ -304,6 +385,15 @@ export async function startNextAccount(data: AWSData): Promise<Data> {
     let account = data.state.private.awsAccounts.find((account: AWSAccount) => account.work.status === "not_started")
 
     if (!account) {
+        console.log("not_started account NOT found")
+
+        data.state.public.finalStatement = `Processed ${data.state.public.progress.total} AWS accounts. Failed to fetch ${data.state.private.awsAccounts.filter(a => a.work.errorStr).length} accounts.`
+
+        delete data.state.public.progress
+
+        // Set status to idle
+        data.state.public.status = "idle"
+
         return data
     }
 
@@ -323,6 +413,8 @@ export async function startNextAccount(data: AWSData): Promise<Data> {
                 email: data.context.instanceId
             }
         })
+
+        console.log("start next account", account.accountId)
 
         data.tasks = [{
             after: 0,
@@ -355,6 +447,7 @@ export async function startNextAccount(data: AWSData): Promise<Data> {
 export async function receiveWorkerEvents(data: AWSData<AWSWorkerEventBody>): Promise<Data> {
 
     console.log("data.context.methodName", data.context.methodName)
+    console.log("receiveWorkerEvents", data.request.body)
 
     // if cancellation is requested, stop processing
     if (data.state.private.fetchCancellation === "requested") {
@@ -433,6 +526,14 @@ export async function receiveWorkerEvents(data: AWSData<AWSWorkerEventBody>): Pr
 
     return data
 }
+
+export async function forceSetIdle(data: AWSData): Promise<Data> {
+    delete data.state.public.progress
+    // Set status to idle
+    data.state.public.status = "idle"
+    return data
+}
+
 
 export async function handleAction(data: AWSData<HandleAWSActionInput>): Promise<Data> {
     const { action, arn, config } = data.request.body
@@ -560,6 +661,17 @@ export async function setCredentials(data: AWSData<AWSSecretsInput>): Promise<Da
         accessKeyId: maskString(data.request.body.accessKeyId),
         secretAccessKey: maskString(data.request.body.secretAccessKey)
     }
+    data.response = {
+        statusCode: 200,
+        body: "OK"
+    }
+    return data
+}
+
+// clearCredentials
+export async function clearCredentials(data: AWSData): Promise<Data> {
+    delete data.state.private.credentials
+    delete data.state.public.maskedCredentials
     data.response = {
         statusCode: 200,
         body: "OK"

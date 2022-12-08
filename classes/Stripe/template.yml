@@ -3,6 +3,7 @@ init:
   # inputModel: InitBody
 getState: index.getState
 getInstanceId: index.getInstanceId
+authorizer: index.authorizer
 methods:
 
 

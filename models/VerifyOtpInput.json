@@ -4,7 +4,8 @@
   "properties": {
     "code": {
       "type": "string",
-      "description": "SMS Otp code"
+      "description": "SMS Otp code",
+      "pattern": "^\\d{6}$"
     }
   }
 }

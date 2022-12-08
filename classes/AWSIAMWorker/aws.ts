@@ -12,9 +12,11 @@ interface AWSCredentials {
 export default class AWSHandler {
 
     credentials: AWSCredentials
+    accountId: string
 
-    constructor(credentials: AWSCredentials) {
+    constructor(accountId: string, credentials: AWSCredentials) {
         this.credentials = credentials
+        this.accountId = accountId
     }
 
     fillUserDetails = async (user) => {
@@ -23,16 +25,16 @@ export default class AWSHandler {
             credentials: this.credentials
         })
 
-        let mfaDevicesResp = await iam.listMFADevices({
-            UserName: user.UserName
-        }).promise()
+        // let mfaDevicesResp = await iam.listMFADevices({
+        //     UserName: user.UserName
+        // }).promise()
 
         // List access keys for user
         let accessKeysResp = await iam.listAccessKeys({
             UserName: user.UserName
         }).promise()
 
-        user.mfaDevices = mfaDevicesResp.MFADevices
+        // user.mfaDevices = mfaDevicesResp.MFADevices
         user.accessKeys = accessKeysResp.AccessKeyMetadata
 
         // Fill last used date for access keys
@@ -56,6 +58,18 @@ export default class AWSHandler {
         let policies = []
 
         let marker = null
+
+        // List all mfa devices for all users
+        let mfaDevices = []
+        while (marker !== undefined) {
+            console.log("listVirtualMFADevices")
+            let virtualMFADevices = await iam.listVirtualMFADevices().promise()
+            mfaDevices = mfaDevices.concat(virtualMFADevices.VirtualMFADevices)
+            marker = virtualMFADevices.Marker
+        }
+        console.log("mfaDevices", mfaDevices)
+        
+        marker = null
 
         while (marker !== undefined) {
 
@@ -86,11 +100,30 @@ export default class AWSHandler {
             marker = authDetails.Marker
         }
 
+        // Add root user
+        users.push({
+            Arn: "arn:aws:iam::" + this.accountId + ":root",
+            Path: "/",
+            UserId: "root",
+            UserName: "root",
+            UserPolicyList: [],
+
+        })
+
+        // Now set all mfa devices for all users including root user
+        for (let user of users) {
+            user.mfaDevices = mfaDevices.filter((mfaDevice) => {
+                console.log("mfaDevice", mfaDevice)
+                return mfaDevice.User && mfaDevice.User.Arn === user.Arn
+            })
+        }
+
+
         return {
             users,
             groups,
             roles,
-            policies
+            policies,
         }
     }
 

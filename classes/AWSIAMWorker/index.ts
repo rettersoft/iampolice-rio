@@ -39,16 +39,32 @@ interface AWSIAMWorkerData<I = any, O = any> extends Data<I, O, AWSIAMWorkerData
 }
 
 export async function getInstanceId(data: Data<InitBody>): Promise<string> {
+    console.log("getInstanceId", data)
     return data.request.body.email
 }
 
 export async function authorizer(data: Data): Promise<Response> {
 
-    if (data.context.methodName === 'deleteIAMUser') {
-        return { statusCode: 401, body: { message: 'Unauthorized' } }
+    console.log("authorizer", data)
+
+    // Allow developer identity
+    if(data.context.identity === "developer") {
+        return { statusCode: 200 }
     }
 
-    return { statusCode: 200 };
+    // if (data.context.methodName === 'deleteIAMUser' || data.context.methodName === 'deleteUnusedAccessKeysForUser') {
+    //     return { statusCode: 401, body: { message: 'Unauthorized' } }
+    // }
+
+    if(data.context.methodName === "INIT") {
+        return { statusCode: 200 }
+    }
+
+    if(data.context.identity === "AWS" && data.context.instanceId === data.context.userId) {
+        return { statusCode: 200 }
+    }
+
+    return { statusCode: 401 };
 }
 
 export async function init(data: AWSIAMWorkerData<InitBody>): Promise<Data> {
@@ -83,7 +99,7 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
     })
 
     // Fetch aws account list
-    const awsHandler = new AWSHandler({
+    const awsHandler = new AWSHandler(data.request.body.accountId, {
         accessKeyId: data.request.body.accessKeyId,
         secretAccessKey: data.request.body.secretAccessKey,
         sessionToken: data.request.body.sessionToken
@@ -92,7 +108,8 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
     const authDetails = await awsHandler.getAccountAuthorizationDetails()
 
     // Convert authDetails to a flat array of AWSResource objects
-    const resources: AWSResource[] = []
+    let resources: AWSResource[] = []
+
 
     authDetails.users.forEach((user: IamUser) => {
         resources.push({
@@ -128,6 +145,7 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
             resourceType: "AWS::IAM::Role"
         })
     })
+
     // authDetails.Policies.forEach((policy: any) => {
     //     resources.push({
     //         arn: policy.Arn,
@@ -136,6 +154,11 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
     //     })
     // })
 
+    console.log("sending receiveWorkerEvents", {
+        accountId: data.request.body.accountId,
+        status: "finished",
+        resources,
+    })
 
     await rdk.methodCall({
         classId: "AWS",
@@ -144,7 +167,7 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
         body: {
             accountId: data.request.body.accountId,
             status: "finished",
-            data: resources
+            data: resources,
         }
     })
 
@@ -154,7 +177,7 @@ export async function start(data: AWSIAMWorkerData<AWSWorkerStartInput>): Promis
 // implement deleteUser
 export async function deleteIAMUser(data: AWSIAMWorkerData<DeleteUserInput>): Promise<Data> {
 
-    const awsHandler = new AWSHandler({
+    const awsHandler = new AWSHandler(data.request.body.accountId, {
         accessKeyId: data.request.body.accessKeyId,
         secretAccessKey: data.request.body.secretAccessKey,
         sessionToken: data.request.body.sessionToken
@@ -182,7 +205,7 @@ export async function deleteIAMUser(data: AWSIAMWorkerData<DeleteUserInput>): Pr
 // implement deleteUnusedAccessKeys
 export async function deleteUnusedAccessKeysForUser(data: AWSIAMWorkerData<DeleteUserInput>): Promise<Data> {
 
-    const awsHandler = new AWSHandler({
+    const awsHandler = new AWSHandler(data.request.body.accountId, {
         accessKeyId: data.request.body.accessKeyId,
         secretAccessKey: data.request.body.secretAccessKey,
         sessionToken: data.request.body.sessionToken
